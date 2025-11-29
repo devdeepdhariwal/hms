@@ -25,7 +25,7 @@ model Hospital {
   email             String   @unique
   phone             String
   licenseNumber     String   @unique
-  domain            String?
+  domain            String   @unique
   
   status            HospitalStatus @default(PENDING)
   isEmailVerified   Boolean  @default(false)
@@ -37,7 +37,6 @@ model Hospital {
   activatedAt       DateTime?
   suspendedAt       DateTime?
   
-  // Relations
   users             User[]
   patients          Patient[]
   departments       Department[]
@@ -61,7 +60,7 @@ enum HospitalStatus {
 
 model User {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId          String?  // Changed: String UUID instead of ObjectId
+  tenantId          String?
   hospitalId        String?  @db.ObjectId
   hospital          Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
@@ -84,7 +83,6 @@ model User {
   updatedAt         DateTime @updatedAt
   lastLoginAt       DateTime?
   
-  // Relations
   roleIds           String[] @db.ObjectId
   roles             Role[] @relation(fields: [roleIds], references: [id])
   passwordHistory   PasswordHistory[]
@@ -92,6 +90,8 @@ model User {
   refreshTokens     RefreshToken[]
   createdPatients   Patient[] @relation("CreatedBy")
   prescriptions     Prescription[]
+  vitalsRecorded    Vital[]
+  careNotes         CareNote[]
   
   @@map("users")
 }
@@ -105,7 +105,7 @@ enum UserStatus {
 
 model Role {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId    String?  // Changed: String UUID instead of ObjectId
+  tenantId    String?
   hospitalId  String?  @db.ObjectId
   hospital    Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
@@ -117,7 +117,6 @@ model Role {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  // Relations
   userIds     String[] @db.ObjectId
   users       User[] @relation(fields: [userIds], references: [id])
   permissionIds String[] @db.ObjectId
@@ -136,7 +135,6 @@ model Permission {
   
   createdAt   DateTime @default(now())
   
-  // Relations
   roleIds     String[] @db.ObjectId
   roles       Role[] @relation(fields: [roleIds], references: [id])
   
@@ -195,7 +193,7 @@ model RefreshToken {
 
 model Department {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId    String   // Changed: String UUID instead of ObjectId
+  tenantId    String
   hospitalId  String   @db.ObjectId
   hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
@@ -207,7 +205,6 @@ model Department {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  // Relations
   patients    Patient[]
   
   @@unique([tenantId, code])
@@ -220,7 +217,7 @@ model Department {
 
 model Patient {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId          String   // Changed: String UUID instead of ObjectId
+  tenantId          String
   hospitalId        String   @db.ObjectId
   hospital          Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
@@ -259,8 +256,9 @@ model Patient {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   
-  // Relations
   prescriptions     Prescription[]
+  vitals            Vital[]
+  careNotes         CareNote[]
   
   @@map("patients")
 }
@@ -277,12 +275,57 @@ enum PatientType {
 }
 
 // ============================================
+// VITALS & CARE NOTES
+// ============================================
+
+model Vital {
+  id                      String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                String
+  patientId               String   @db.ObjectId
+  patient                 Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  bloodPressureSystolic   Float?
+  bloodPressureDiastolic  Float?
+  temperature             Float?
+  pulse                   Int?
+  spO2                    Float?
+  weight                  Float?
+  notes                   String?
+  
+  recordedById            String   @db.ObjectId
+  recordedBy              User     @relation(fields: [recordedById], references: [id])
+  recordedAt              DateTime @default(now())
+  
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  @@map("vitals")
+}
+
+model CareNote {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String
+  patientId  String   @db.ObjectId
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  nurseId    String   @db.ObjectId
+  nurse      User     @relation(fields: [nurseId], references: [id])
+  
+  note       String
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@map("care_notes")
+}
+
+// ============================================
 // PRESCRIPTION MANAGEMENT
 // ============================================
 
 model Prescription {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId        String   // Changed: String UUID instead of ObjectId
+  tenantId        String
   hospitalId      String   @db.ObjectId
   hospital        Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
@@ -322,7 +365,7 @@ type Medicine {
 
 model PrescriptionTemplate {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId    String   // Changed: String UUID instead of ObjectId
+  tenantId    String
   
   name        String
   diagnosis   String?
@@ -341,4 +384,21 @@ type TemplateMedicine {
   frequency       String
   duration        String
   instructions    String?
+}
+
+// ============================================
+// EMAIL OTP FOR VERIFICATION
+// ============================================
+
+model EmailOtp {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  code      String
+  purpose   String
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("email_otps")
 }

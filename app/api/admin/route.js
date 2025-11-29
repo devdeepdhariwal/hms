@@ -1,3 +1,4 @@
+// app/api/admin/route.js
 import { NextResponse } from 'next/server';
 import { authenticate, requireRole } from '@/lib/auth';
 import { db, prisma } from '@/lib/db';
@@ -9,6 +10,12 @@ import {
   handleApiError,
   schemas 
 } from '@/lib/utils';
+import { 
+  sendHospitalActivationEmail,
+  sendHospitalSuspendedEmail,
+  sendHospitalInactivatedEmail,
+  sendHospitalReactivatedEmail
+} from '@/lib/email';
 
 // ============================================
 // HELPER: Check Super Admin
@@ -37,17 +44,14 @@ async function getHospitals(req) {
     const { searchParams } = new URL(req.url);
     const { page, limit, search, status, sortBy, sortOrder } = parseQueryParams(searchParams);
 
-    // Build where clause
     const where = buildWhereClause(
       search,
       ['name', 'email', 'licenseNumber', 'phone'],
       status ? { status } : {}
     );
 
-    // Get total count
     const total = await prisma.hospital.count({ where });
 
-    // Get hospitals
     const hospitals = await db.getHospitalsWithStats(
       where,
       (page - 1) * limit,
@@ -148,11 +152,47 @@ async function approveHospital(req) {
       activatedAt: new Date(),
     });
 
+
+    for (const roleData of rolesToCreate) {
+      const existing = await prisma.role.findFirst({
+        where: { name: roleData.name, hospitalId: hospital.id },
+      });
+
+      if (!existing) {
+        await prisma.role.create({
+          data: {
+            tenantId: hospital.tenantId,
+            hospitalId: hospital.id,
+            name: roleData.name,
+            description: roleData.description,
+            isSystemRole: false,
+            isActive: true,
+          },
+        });
+      }
+    }
+
+    const primaryAdmin = await prisma.user.findFirst({
+      where: { hospitalId: hospital.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (primaryAdmin) {
+      const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`;
+      await sendHospitalActivationEmail(primaryAdmin.email, {
+        hospitalName: hospital.name,
+        adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
+        username: primaryAdmin.username,
+        loginUrl,
+      });
+    }
+
     return NextResponse.json(ApiResponse.success(hospital, 'Hospital approved successfully'));
   } catch (error) {
     return NextResponse.json(handleApiError(error, 'Failed to approve hospital'), { status: 500 });
   }
 }
+
 
 // ============================================
 // PATCH /api/admin?action=hospital-suspend&id=xxx
@@ -173,9 +213,58 @@ async function suspendHospital(req) {
       suspendedAt: new Date(),
     });
 
+    const primaryAdmin = await prisma.user.findFirst({
+      where: { hospitalId: hospital.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (primaryAdmin) {
+      await sendHospitalSuspendedEmail(primaryAdmin.email, {
+        hospitalName: hospital.name,
+        adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
+        reason: '',
+      });
+    }
+
     return NextResponse.json(ApiResponse.success(hospital, 'Hospital suspended successfully'));
   } catch (error) {
     return NextResponse.json(handleApiError(error, 'Failed to suspend hospital'), { status: 500 });
+  }
+}
+
+// ============================================
+// PATCH /api/admin?action=hospital-inactivate&id=xxx
+// ============================================
+async function inactivateHospital(req) {
+  try {
+    const check = await checkSuperAdmin(req);
+    if (check.error) return check.error;
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(ApiResponse.error('Hospital ID is required', 400), { status: 400 });
+    }
+
+    const hospital = await db.updateHospitalStatus(id, 'INACTIVE', {});
+
+    const primaryAdmin = await prisma.user.findFirst({
+      where: { hospitalId: hospital.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (primaryAdmin) {
+      await sendHospitalInactivatedEmail(primaryAdmin.email, {
+        hospitalName: hospital.name,
+        adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
+        reason: '',
+      });
+    }
+
+    return NextResponse.json(ApiResponse.success(hospital, 'Hospital inactivated successfully'));
+  } catch (error) {
+    return NextResponse.json(handleApiError(error, 'Failed to inactivate hospital'), { status: 500 });
   }
 }
 
@@ -197,6 +286,20 @@ async function reactivateHospital(req) {
     const hospital = await db.updateHospitalStatus(id, 'ACTIVE', {
       suspendedAt: null,
     });
+
+    const primaryAdmin = await prisma.user.findFirst({
+      where: { hospitalId: hospital.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (primaryAdmin) {
+      const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`;
+      await sendHospitalReactivatedEmail(primaryAdmin.email, {
+        hospitalName: hospital.name,
+        adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
+        loginUrl,
+      });
+    }
 
     return NextResponse.json(ApiResponse.success(hospital, 'Hospital reactivated successfully'));
   } catch (error) {
@@ -306,7 +409,6 @@ async function getPermissions(req) {
 
     const permissions = await db.getAllPermissions();
 
-    // Group by resource
     const groupedPermissions = permissions.reduce((acc, permission) => {
       if (!acc[permission.resource]) {
         acc[permission.resource] = [];
@@ -408,6 +510,8 @@ export async function PATCH(req) {
       return approveHospital(req);
     case 'hospital-suspend':
       return suspendHospital(req);
+    case 'hospital-inactivate':
+      return inactivateHospital(req);
     case 'hospital-reactivate':
       return reactivateHospital(req);
     default:
