@@ -1,0 +1,344 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// SUPER ADMIN & MULTI-TENANCY MODELS
+// ============================================
+
+model Hospital {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId          String   @unique @default(uuid())
+  name              String
+  address           String
+  city              String?
+  state             String?
+  country           String?
+  pincode           String?
+  email             String   @unique
+  phone             String
+  licenseNumber     String   @unique
+  domain            String?
+  
+  status            HospitalStatus @default(PENDING)
+  isEmailVerified   Boolean  @default(false)
+  verificationToken String?
+  verificationTokenExpiry DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  activatedAt       DateTime?
+  suspendedAt       DateTime?
+  
+  // Relations
+  users             User[]
+  patients          Patient[]
+  departments       Department[]
+  roles             Role[]
+  prescriptions     Prescription[]
+  
+  @@map("hospitals")
+}
+
+enum HospitalStatus {
+  PENDING
+  VERIFIED
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+// ============================================
+// USER & AUTHENTICATION MODELS
+// ============================================
+
+model User {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId          String?  // Changed: String UUID instead of ObjectId
+  hospitalId        String?  @db.ObjectId
+  hospital          Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  firstName         String
+  lastName          String
+  email             String   @unique
+  phone             String
+  username          String   @unique
+  password          String
+  
+  department        String?
+  specialization    String?
+  shift             String?
+  
+  status            UserStatus @default(ACTIVE)
+  isEmailVerified   Boolean  @default(false)
+  mustChangePassword Boolean @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastLoginAt       DateTime?
+  
+  // Relations
+  roleIds           String[] @db.ObjectId
+  roles             Role[] @relation(fields: [roleIds], references: [id])
+  passwordHistory   PasswordHistory[]
+  passwordResets    PasswordReset[]
+  refreshTokens     RefreshToken[]
+  createdPatients   Patient[] @relation("CreatedBy")
+  prescriptions     Prescription[]
+  
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+  PASSWORD_EXPIRED
+}
+
+model Role {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?  // Changed: String UUID instead of ObjectId
+  hospitalId  String?  @db.ObjectId
+  hospital    Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  isSystemRole Boolean @default(false)
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  userIds     String[] @db.ObjectId
+  users       User[] @relation(fields: [userIds], references: [id])
+  permissionIds String[] @db.ObjectId
+  permissions Permission[] @relation(fields: [permissionIds], references: [id])
+  
+  @@unique([name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  resource    String
+  action      String
+  code        String   @unique
+  description String?
+  
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  roleIds     String[] @db.ObjectId
+  roles       Role[] @relation(fields: [roleIds], references: [id])
+  
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+// ============================================
+// PASSWORD & TOKEN MANAGEMENT
+// ============================================
+
+model PasswordHistory {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  passwordHash  String
+  createdAt     DateTime @default(now())
+  
+  @@map("password_history")
+}
+
+model PasswordReset {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token         String   @unique
+  expiresAt     DateTime
+  isUsed        Boolean  @default(false)
+  usedAt        DateTime?
+  
+  createdAt     DateTime @default(now())
+  
+  @@map("password_resets")
+}
+
+model RefreshToken {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token         String   @unique
+  expiresAt     DateTime
+  isRevoked     Boolean  @default(false)
+  revokedAt     DateTime?
+  
+  createdAt     DateTime @default(now())
+  
+  @@map("refresh_tokens")
+}
+
+// ============================================
+// HOSPITAL STRUCTURE
+// ============================================
+
+model Department {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String   // Changed: String UUID instead of ObjectId
+  hospitalId  String   @db.ObjectId
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  name        String
+  code        String
+  description String?
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  patients    Patient[]
+  
+  @@unique([tenantId, code])
+  @@map("departments")
+}
+
+// ============================================
+// PATIENT MANAGEMENT
+// ============================================
+
+model Patient {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId          String   // Changed: String UUID instead of ObjectId
+  hospitalId        String   @db.ObjectId
+  hospital          Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  patientId         String   @unique
+  
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  gender            Gender
+  bloodGroup        String?
+  
+  email             String?
+  phone             String
+  address           String
+  city              String?
+  state             String?
+  pincode           String?
+  
+  emergencyContactName  String
+  emergencyContactPhone String
+  emergencyContactRelation String?
+  
+  photoUrl          String?
+  
+  patientType       PatientType
+  departmentId      String?  @db.ObjectId
+  department        Department? @relation(fields: [departmentId], references: [id])
+  
+  confidentialityLevel String @default("NORMAL")
+  
+  isActive          Boolean  @default(true)
+  
+  createdById       String   @db.ObjectId
+  createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  prescriptions     Prescription[]
+  
+  @@map("patients")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum PatientType {
+  OPD
+  IPD
+}
+
+// ============================================
+// PRESCRIPTION MANAGEMENT
+// ============================================
+
+model Prescription {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String   // Changed: String UUID instead of ObjectId
+  hospitalId      String   @db.ObjectId
+  hospital        Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  prescriptionId  String   @unique
+  
+  patientId       String   @db.ObjectId
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  doctorId        String   @db.ObjectId
+  doctor          User     @relation(fields: [doctorId], references: [id])
+  
+  diagnosis       String?
+  notes           String?
+  
+  medicines       Medicine[]
+  
+  isDispensed     Boolean  @default(false)
+  dispensedAt     DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("prescriptions")
+}
+
+type Medicine {
+  medicineName    String
+  dosage          String
+  frequency       String
+  duration        String
+  instructions    String?
+}
+
+// ============================================
+// PRESCRIPTION TEMPLATES
+// ============================================
+
+model PrescriptionTemplate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String   // Changed: String UUID instead of ObjectId
+  
+  name        String
+  diagnosis   String?
+  medicines   TemplateMedicine[]
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("prescription_templates")
+}
+
+type TemplateMedicine {
+  medicineName    String
+  dosage          String
+  frequency       String
+  duration        String
+  instructions    String?
+}
