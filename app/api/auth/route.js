@@ -14,17 +14,23 @@ import { sendOtpEmail } from '@/lib/email';
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-function generateTenantId(hospitalName) {
-  const code = hospitalName
-    .split(' ')
-    .map(word => word[0])
-    .join('')
+// ✅ IMPROVED: Generate sequential tenant ID
+async function generateHospitalTenantId(hospitalName) {
+  // Get first 4 letters of hospital name (uppercase)
+  const nameCode = hospitalName
+    .replace(/[^a-zA-Z]/g, '') // Remove non-alphabetic characters
     .toUpperCase()
-    .slice(0, 4);
-  
-  const uniqueId = Math.floor(1000 + Math.random() * 9000);
-  
-  return `${code}${uniqueId}`;
+    .slice(0, 4)
+    .padEnd(4, 'X'); // Pad with X if less than 4 letters
+
+  // Get count of existing hospitals
+  const hospitalCount = await prisma.hospital.count();
+
+  // Generate sequential number (4 digits)
+  const sequentialNumber = (hospitalCount + 1).toString().padStart(4, '0');
+
+  // Format: HOSP-{NAME}-{NUMBER} (e.g., HOSP-APOL-0001)
+  return `HOSP-${nameCode}-${sequentialNumber}`;
 }
 
 function extractDomain(website) {
@@ -119,12 +125,13 @@ async function handleRegisterHospital(req) {
       return NextResponse.json(ApiResponse.error('Role not found', 500), { status: 500 });
     }
 
-    const tenantId = generateTenantId(hospitalName);
+    // ✅ Generate custom tenant ID
+    const tenantId = await generateHospitalTenantId(hospitalName);
 
     const { hospital } = await prisma.$transaction(async (tx) => {
       const hospital = await tx.hospital.create({
         data: {
-          tenantId,
+          tenantId, // ✅ Use generated tenant ID
           name: hospitalName, 
           address, 
           email, 
@@ -157,7 +164,7 @@ async function handleRegisterHospital(req) {
     return NextResponse.json(
       ApiResponse.success({
         hospitalId: hospital.id,
-        tenantId: hospital.tenantId,
+        tenantId: hospital.tenantId, // ✅ Return tenant ID
         adminUsername,
         message: 'Hospital registered. Awaiting Super Admin approval.',
       }),
@@ -215,7 +222,6 @@ async function handleLogin(req) {
     return NextResponse.json(handleApiError(error), { status: 500 });
   }
 }
-
 
 async function handleRefresh(req) {
   try {

@@ -147,31 +147,13 @@ async function approveHospital(req) {
       return NextResponse.json(ApiResponse.error('Hospital ID is required', 400), { status: 400 });
     }
 
+    // ✅ Update hospital status to ACTIVE
     const hospital = await db.updateHospitalStatus(id, 'ACTIVE', {
       isEmailVerified: true,
       activatedAt: new Date(),
     });
 
-
-    for (const roleData of rolesToCreate) {
-      const existing = await prisma.role.findFirst({
-        where: { name: roleData.name, hospitalId: hospital.id },
-      });
-
-      if (!existing) {
-        await prisma.role.create({
-          data: {
-            tenantId: hospital.tenantId,
-            hospitalId: hospital.id,
-            name: roleData.name,
-            description: roleData.description,
-            isSystemRole: false,
-            isActive: true,
-          },
-        });
-      }
-    }
-
+    // ✅ Get primary admin to send email
     const primaryAdmin = await prisma.user.findFirst({
       where: { hospitalId: hospital.id },
       orderBy: { createdAt: 'asc' },
@@ -192,7 +174,6 @@ async function approveHospital(req) {
     return NextResponse.json(handleApiError(error, 'Failed to approve hospital'), { status: 500 });
   }
 }
-
 
 // ============================================
 // PATCH /api/admin?action=hospital-suspend&id=xxx
@@ -222,7 +203,7 @@ async function suspendHospital(req) {
       await sendHospitalSuspendedEmail(primaryAdmin.email, {
         hospitalName: hospital.name,
         adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
-        reason: '',
+        reason: 'Suspended by Super Admin',
       });
     }
 
@@ -258,7 +239,7 @@ async function inactivateHospital(req) {
       await sendHospitalInactivatedEmail(primaryAdmin.email, {
         hospitalName: hospital.name,
         adminName: `${primaryAdmin.firstName} ${primaryAdmin.lastName}`,
-        reason: '',
+        reason: 'Inactivated by Super Admin',
       });
     }
 
