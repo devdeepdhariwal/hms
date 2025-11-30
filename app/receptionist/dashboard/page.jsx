@@ -19,9 +19,18 @@ import {
   Calendar,
   User,
   Download,
+  Upload,
+  Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 
 function DashboardContent() {
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploadingUpdateImage, setUploadingUpdateImage] = useState(false);
+  const [updateImagePreview, setUpdateImagePreview] = useState('');
+  const [selectedUpdateFile, setSelectedUpdateFile] = useState(null);
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState(null);
   const [patients, setPatients] = useState([]);
@@ -84,11 +93,11 @@ function DashboardContent() {
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
     setUser(userData);
-    
+
     if (userData?.mustChangePassword) {
       setShowPasswordModal(true);
     }
-    
+
     fetchStats();
     fetchPatients();
   }, []);
@@ -185,6 +194,149 @@ function DashboardContent() {
       setPasswordLoading(false);
     }
   };
+
+  // ✅ ADD THIS - Handle image file selection for register
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Only JPG, PNG, and WebP are allowed.');
+      return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setError('File size exceeds 2MB limit');
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+
+  const handleImageUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploadingImage(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('folder', 'patients');
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to upload image');
+      }
+
+
+      setPatientForm({ ...patientForm, photoUrl: data.data.url });
+      setSuccess('Image uploaded successfully!');
+
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.message || 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+
+  const handleRemoveImage = () => {
+    setSelectedFile(null);
+    setImagePreview('');
+    setPatientForm({ ...patientForm, photoUrl: '' });
+  };
+
+
+  const handleUpdateImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Only JPG, PNG, and WebP are allowed.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError('File size exceeds 2MB limit');
+      return;
+    }
+
+    setSelectedUpdateFile(file);
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setUpdateImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+
+  const handleUpdateImageUpload = async () => {
+    if (!selectedUpdateFile) return;
+
+    setUploadingUpdateImage(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const formData = new FormData();
+      formData.append('file', selectedUpdateFile);
+      formData.append('folder', 'patients');
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to upload image');
+      }
+
+      setUpdateForm({ ...updateForm, photoUrl: data.data.url });
+      setSuccess('Image uploaded successfully!');
+
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.message || 'Failed to upload image');
+    } finally {
+      setUploadingUpdateImage(false);
+    }
+  };
+
+
+  const handleRemoveUpdateImage = () => {
+    setSelectedUpdateFile(null);
+    setUpdateImagePreview('');
+    setUpdateForm({ ...updateForm, photoUrl: '' });
+  };
+
 
   const handleRegisterPatient = async (e) => {
     e.preventDefault();
@@ -468,11 +620,10 @@ function DashboardContent() {
                         <td className="py-4 px-4 text-sm font-medium text-gray-700">{p.phone}</td>
                         <td className="py-4 px-4">
                           <span
-                            className={`inline-block px-3 py-1 text-xs font-bold rounded-full ${
-                              p.patientType === 'OPD'
-                                ? 'bg-purple-200 text-purple-900'
-                                : 'bg-orange-200 text-orange-900'
-                            }`}
+                            className={`inline-block px-3 py-1 text-xs font-bold rounded-full ${p.patientType === 'OPD'
+                              ? 'bg-purple-200 text-purple-900'
+                              : 'bg-orange-200 text-orange-900'
+                              }`}
                           >
                             {p.patientType}
                           </span>
@@ -846,16 +997,76 @@ function DashboardContent() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2">Photo URL (Optional)</label>
-                <input
-                  type="url"
-                  value={patientForm.photoUrl}
-                  onChange={(e) => setPatientForm({ ...patientForm, photoUrl: e.target.value })}
-                  className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all"
-                  placeholder="https://example.com/photo.jpg"
-                />
+              {/* ✅ NEW IMAGE UPLOAD SECTION FOR REGISTER */}
+              <div className="border-t-2 border-gray-200 pt-5">
+                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <ImageIcon className="w-5 h-5 mr-2" />
+                  Patient Photo (Optional)
+                </h4>
+
+                {/* Image Preview or Upload Area */}
+                {imagePreview || patientForm.photoUrl ? (
+                  <div className="relative w-40 h-40 mx-auto mb-4">
+                    <img
+                      src={imagePreview || patientForm.photoUrl}
+                      alt="Patient preview"
+                      className="w-full h-full object-cover rounded-lg border-2 border-pink-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 transition-all"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-pink-500 transition-all mb-4">
+                    <ImageIcon className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                    <p className="text-sm text-gray-600 font-medium mb-2">
+                      Upload patient photo
+                    </p>
+                    <p className="text-xs text-gray-500 mb-3">
+                      JPG, PNG or WebP (max 2MB)
+                    </p>
+                    <label className="cursor-pointer inline-flex items-center px-4 py-2 bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200 transition-all">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Choose File
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {/* Upload Button */}
+                {selectedFile && !patientForm.photoUrl && (
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={handleImageUpload}
+                      disabled={uploadingImage}
+                      className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 text-white font-semibold rounded-lg hover:shadow-lg disabled:opacity-60 transition-all"
+                    >
+                      {uploadingImage ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Photo
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
+
 
               <div className="flex justify-end gap-3 pt-6 border-t-2 border-gray-200">
                 <button
@@ -980,16 +1191,74 @@ function DashboardContent() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2">Photo URL</label>
-                <input
-                  type="url"
-                  value={updateForm.photoUrl}
-                  onChange={(e) => setUpdateForm({ ...updateForm, photoUrl: e.target.value })}
-                  className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all"
-                  placeholder="https://example.com/photo.jpg"
-                />
+              {/* ✅ NEW IMAGE UPLOAD SECTION FOR UPDATE */}
+              <div className="border-t-2 border-gray-200 pt-5">
+                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <ImageIcon className="w-5 h-5 mr-2" />
+                  Update Photo
+                </h4>
+
+                {updateImagePreview || updateForm.photoUrl ? (
+                  <div className="relative w-40 h-40 mx-auto mb-4">
+                    <img
+                      src={updateImagePreview || updateForm.photoUrl}
+                      alt="Patient preview"
+                      className="w-full h-full object-cover rounded-lg border-2 border-pink-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveUpdateImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 transition-all"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-pink-500 transition-all mb-4">
+                    <ImageIcon className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                    <p className="text-sm text-gray-600 font-medium mb-2">
+                      Upload new photo
+                    </p>
+                    <p className="text-xs text-gray-500 mb-3">
+                      JPG, PNG or WebP (max 2MB)
+                    </p>
+                    <label className="cursor-pointer inline-flex items-center px-4 py-2 bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200 transition-all">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Choose File
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        onChange={handleUpdateImageSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {selectedUpdateFile && !updateForm.photoUrl && (
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={handleUpdateImageUpload}
+                      disabled={uploadingUpdateImage}
+                      className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 text-white font-semibold rounded-lg hover:shadow-lg disabled:opacity-60 transition-all"
+                    >
+                      {uploadingUpdateImage ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Photo
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
+
 
               <div className="flex justify-end gap-3 pt-6 border-t-2 border-gray-200">
                 <button
@@ -1037,11 +1306,29 @@ function DashboardContent() {
 
             <div className="space-y-6">
               {/* Basic Info */}
+              {/* Patient Photo - ✅ ADD THIS */}
+              {selectedPatient.photoUrl && (
+                <div className="flex justify-center mb-6">
+                  <div className="relative">
+                    <img
+                      src={selectedPatient.photoUrl}
+                      alt={`${selectedPatient.firstName} ${selectedPatient.lastName}`}
+                      className="w-32 h-32 rounded-full object-cover border-4 border-pink-300 shadow-lg"
+                    />
+                    <div className="absolute bottom-0 right-0 bg-gradient-to-r from-pink-600 to-rose-600 p-2 rounded-full border-2 border-white">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Basic Info */}
               <div className="bg-gradient-to-r from-pink-50 to-rose-50 p-6 rounded-lg border-2 border-pink-200">
                 <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
                   <User className="w-5 h-5 mr-2" />
                   Basic Information
                 </h4>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm font-bold text-gray-900">Patient ID:</p>
@@ -1073,11 +1360,10 @@ function DashboardContent() {
                   <div>
                     <p className="text-sm font-bold text-gray-900">Patient Type:</p>
                     <span
-                      className={`inline-block px-3 py-1 text-xs font-bold rounded-full ${
-                        selectedPatient.patientType === 'OPD'
-                          ? 'bg-purple-200 text-purple-900'
-                          : 'bg-orange-200 text-orange-900'
-                      }`}
+                      className={`inline-block px-3 py-1 text-xs font-bold rounded-full ${selectedPatient.patientType === 'OPD'
+                        ? 'bg-purple-200 text-purple-900'
+                        : 'bg-orange-200 text-orange-900'
+                        }`}
                     >
                       {selectedPatient.patientType}
                     </span>

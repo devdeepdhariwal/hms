@@ -14,6 +14,7 @@ import {
   Zap
 } from 'lucide-react';
 
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
@@ -32,7 +33,6 @@ export default function Home() {
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-gray-700 hover:text-blue-600 transition-colors">Features</a>
               <a href="#benefits" className="text-gray-700 hover:text-blue-600 transition-colors">Benefits</a>
-              <a href="#about" className="text-gray-700 hover:text-blue-600 transition-colors">About</a>
               <Link href="/auth/login">
                 <button className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium transition-colors">
                   Login
@@ -47,6 +47,7 @@ export default function Home() {
           </div>
         </div>
       </nav>
+
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
@@ -70,6 +71,7 @@ export default function Home() {
                 manage patient lifecycle, and deliver exceptional healthcare with zero infrastructure investment.
               </p>
 
+
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link href="/auth/register">
                   <button className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2">
@@ -77,22 +79,9 @@ export default function Home() {
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </Link>
-                <button className="px-8 py-4 bg-white text-gray-700 rounded-xl font-semibold border-2 border-gray-200 hover:border-blue-600 hover:text-blue-600 transition-all duration-300">
-                  Watch Demo
-                </button>
-              </div>
-
-              <div className="flex items-center space-x-8 pt-4">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-gray-600">No credit card required</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-gray-600">24/7 Support</span>
-                </div>
               </div>
             </div>
+
 
             {/* Hero Image/Illustration */}
             <div className="relative">
@@ -126,6 +115,7 @@ export default function Home() {
         </div>
       </section>
 
+
       {/* Features Section */}
       <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
         <div className="max-w-7xl mx-auto">
@@ -137,6 +127,7 @@ export default function Home() {
               Powerful features designed to streamline hospital operations and enhance patient care
             </p>
           </div>
+
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Feature 1 */}
@@ -150,6 +141,7 @@ export default function Home() {
               </p>
             </div>
 
+
             {/* Feature 2 */}
             <div className="group p-8 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl hover:shadow-xl transition-all duration-300 border border-purple-100 hover:scale-105">
               <div className="bg-gradient-to-br from-purple-600 to-pink-600 w-14 h-14 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -160,6 +152,7 @@ export default function Home() {
                 Granular permissions for doctors, nurses, pharmacists, and administrators with hierarchical inheritance.
               </p>
             </div>
+
 
             {/* Feature 3 */}
             <div className="group p-8 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl hover:shadow-xl transition-all duration-300 border border-green-100 hover:scale-105">
@@ -172,6 +165,7 @@ export default function Home() {
               </p>
             </div>
 
+
             {/* Feature 4 */}
             <div className="group p-8 bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl hover:shadow-xl transition-all duration-300 border border-orange-100 hover:scale-105">
               <div className="bg-gradient-to-br from-orange-600 to-amber-600 w-14 h-14 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -183,6 +177,7 @@ export default function Home() {
               </p>
             </div>
 
+
             {/* Feature 5 */}
             <div className="group p-8 bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl hover:shadow-xl transition-all duration-300 border border-red-100 hover:scale-105">
               <div className="bg-gradient-to-br from-red-600 to-rose-600 w-14 h-14 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -193,6 +188,7 @@ export default function Home() {
                 OAuth2 authentication, JWT tokens, and encrypted data storage ensuring HIPAA compliance.
               </p>
             </div>
+
 
             {/* Feature 6 */}
             <div className="group p-8 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl hover:shadow-xl transition-all duration-300 border border-indigo-100 hover:scale-105">
@@ -207,6 +203,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+
 
       {/* Benefits Section */}
       <section id="benefits" className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-cyan-50">
@@ -228,6 +225,7 @@ export default function Home() {
                   </div>
                 </div>
 
+
                 <div className="flex items-start space-x-4">
                   <div className="bg-green-100 rounded-full p-2 mt-1">
                     <CheckCircle className="w-6 h-6 text-green-600" />
@@ -237,6 +235,7 @@ export default function Home() {
                     <p className="text-gray-600">Get operational within 24 hours with self-onboarding</p>
                   </div>
                 </div>
+
 
                 <div className="flex items-start space-x-4">
                   <div className="bg-green-100 rounded-full p-2 mt-1">
@@ -248,6 +247,7 @@ export default function Home() {
                   </div>
                 </div>
 
+
                 <div className="flex items-start space-x-4">
                   <div className="bg-green-100 rounded-full p-2 mt-1">
                     <CheckCircle className="w-6 h-6 text-green-600" />
@@ -257,6 +257,7 @@ export default function Home() {
                     <p className="text-gray-600">Round-the-clock technical support and system monitoring</p>
                   </div>
                 </div>
+
 
                 <div className="flex items-start space-x-4">
                   <div className="bg-green-100 rounded-full p-2 mt-1">
@@ -269,6 +270,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
 
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-3xl blur-3xl opacity-20"></div>
@@ -305,6 +307,7 @@ export default function Home() {
         </div>
       </section>
 
+
       {/* CTA Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600 to-cyan-600">
         <div className="max-w-4xl mx-auto text-center">
@@ -314,67 +317,29 @@ export default function Home() {
           <p className="text-xl text-blue-100 mb-8">
             Join hundreds of hospitals already using MediCare HMS to deliver better patient care
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/register">
-              <button className="px-8 py-4 bg-white text-blue-600 rounded-xl font-semibold hover:shadow-2xl hover:scale-105 transition-all duration-300">
-                Get Started Free
-              </button>
-            </Link>
-            <button className="px-8 py-4 bg-transparent text-white border-2 border-white rounded-xl font-semibold hover:bg-white hover:text-blue-600 transition-all duration-300">
-              Schedule Demo
+          <Link href="/auth/register">
+            <button className="px-8 py-4 bg-white text-blue-600 rounded-xl font-semibold hover:shadow-2xl hover:scale-105 transition-all duration-300">
+              Get Started Free
             </button>
-          </div>
+          </Link>
         </div>
       </section>
+
 
       {/* Footer */}
       <footer className="bg-gray-900 text-gray-300 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="bg-gradient-to-br from-blue-600 to-cyan-600 p-2 rounded-lg">
-                  <HeartPulse className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-xl font-bold text-white">MediCare HMS</span>
-              </div>
-              <p className="text-sm text-gray-400">
-                Transforming healthcare management with innovative technology solutions.
-              </p>
+          <div className="flex items-center justify-center space-x-2 mb-4">
+            <div className="bg-gradient-to-br from-blue-600 to-cyan-600 p-2 rounded-lg">
+              <HeartPulse className="w-6 h-6 text-white" />
             </div>
-            
-            <div>
-              <h4 className="text-white font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Security</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Updates</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="text-white font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#about" className="hover:text-white transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="text-white font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">HIPAA Compliance</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Cookie Policy</a></li>
-              </ul>
-            </div>
+            <span className="text-xl font-bold text-white">MediCare HMS</span>
           </div>
+          <p className="text-sm text-gray-400 text-center mb-8">
+            Transforming healthcare management with innovative technology solutions.
+          </p>
           
-          <div className="border-t border-gray-800 mt-12 pt-8 text-center text-sm text-gray-400">
+          <div className="border-t border-gray-800 pt-8 text-center text-sm text-gray-400">
             <p>&copy; 2025 MediCare HMS. All rights reserved.</p>
           </div>
         </div>

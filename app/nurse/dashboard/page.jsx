@@ -20,6 +20,7 @@ import {
   Droplets,
   Weight,
   ClipboardList,
+  Pill,
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -29,10 +30,12 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [patientType, setPatientType] = useState('');
+  const [dischargedFilter, setDischargedFilter] = useState('active');
 
   const [showVitalsModal, setShowVitalsModal] = useState(false);
   const [showCareNoteModal, setShowCareNoteModal] = useState(false);
   const [showPrescriptionsModal, setShowPrescriptionsModal] = useState(false);
+  const [showAllPrescriptionsModal, setShowAllPrescriptionsModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
 
   const [vitalsLoading, setVitalsLoading] = useState(false);
@@ -40,7 +43,6 @@ function DashboardContent() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: '',
@@ -65,6 +67,8 @@ function DashboardContent() {
 
   const [careNote, setCareNote] = useState('');
   const [prescriptions, setPrescriptions] = useState([]);
+  const [allPrescriptions, setAllPrescriptions] = useState([]);
+  const [prescriptionSearch, setPrescriptionSearch] = useState('');
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
@@ -76,7 +80,7 @@ function DashboardContent() {
     
     fetchStats();
     fetchPatients();
-  }, []);
+  }, [dischargedFilter]);
 
   const fetchStats = async () => {
     try {
@@ -94,7 +98,8 @@ function DashboardContent() {
   const fetchPatients = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const res = await fetch('/api/nurse?action=assigned-patients', {
+      const isDischarged = dischargedFilter === 'discharged' ? 'true' : 'false';
+      const res = await fetch(`/api/nurse?action=assigned-patients&isDischarged=${isDischarged}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -103,6 +108,19 @@ function DashboardContent() {
       console.error('Failed to fetch patients:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAllPrescriptions = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch('/api/nurse?action=prescriptions', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setAllPrescriptions(data.data);
+    } catch (err) {
+      console.error('Failed to fetch prescriptions:', err);
     }
   };
 
@@ -277,6 +295,11 @@ function DashboardContent() {
     }
   };
 
+  const handleViewAllPrescriptions = async () => {
+    setShowAllPrescriptionsModal(true);
+    await fetchAllPrescriptions();
+  };
+
   const filteredPatients = patients.filter((p) => {
     const matchesSearch =
       p.firstName.toLowerCase().includes(search.toLowerCase()) ||
@@ -285,6 +308,18 @@ function DashboardContent() {
       p.phone.includes(search);
     const matchesType = patientType ? p.patientType === patientType : true;
     return matchesSearch && matchesType;
+  });
+
+  const filteredPrescriptions = allPrescriptions.filter((rx) => {
+    const searchLower = prescriptionSearch.toLowerCase();
+    return (
+      rx.prescriptionId.toLowerCase().includes(searchLower) ||
+      rx.patient.firstName.toLowerCase().includes(searchLower) ||
+      rx.patient.lastName.toLowerCase().includes(searchLower) ||
+      rx.patient.patientId.toLowerCase().includes(searchLower) ||
+      rx.doctor.firstName.toLowerCase().includes(searchLower) ||
+      rx.doctor.lastName.toLowerCase().includes(searchLower)
+    );
   });
 
   return (
@@ -332,12 +367,12 @@ function DashboardContent() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-md border-2 border-purple-200 p-6 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-purple-800 mb-1">Total Patients</p>
-                    <p className="text-4xl font-bold text-purple-900">{stats?.totalPatients || 0}</p>
+                    <p className="text-sm font-semibold text-purple-800 mb-1">Active Patients</p>
+                    <p className="text-4xl font-bold text-purple-900">{stats?.activePatients || 0}</p>
                   </div>
                   <div className="bg-purple-600 p-4 rounded-xl shadow-md">
                     <Users className="w-8 h-8 text-white" />
@@ -386,9 +421,16 @@ function DashboardContent() {
             <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <h3 className="text-xl font-bold text-gray-900">Assigned Patients</h3>
+                <button
+                  onClick={handleViewAllPrescriptions}
+                  className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all"
+                >
+                  <Pill className="w-5 h-5" />
+                  <span>View All Prescriptions</span>
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <input
@@ -409,6 +451,15 @@ function DashboardContent() {
                   <option value="OPD">OPD</option>
                   <option value="IPD">IPD</option>
                 </select>
+
+                <select
+                  value={dischargedFilter}
+                  onChange={(e) => setDischargedFilter(e.target.value)}
+                  className="px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                >
+                  <option value="active">Active Patients</option>
+                  <option value="discharged">Discharged Patients</option>
+                </select>
               </div>
 
               <div className="overflow-x-auto">
@@ -419,6 +470,7 @@ function DashboardContent() {
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Name</th>
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Contact</th>
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Type</th>
+                      <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Status</th>
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Actions</th>
                     </tr>
                   </thead>
@@ -442,27 +494,42 @@ function DashboardContent() {
                           </span>
                         </td>
                         <td className="py-4 px-4">
+                          <span
+                            className={`inline-block px-3 py-1 text-xs font-bold rounded-full ${
+                              p.isDischarged
+                                ? 'bg-gray-200 text-gray-900'
+                                : 'bg-purple-200 text-purple-900'
+                            }`}
+                          >
+                            {p.isDischarged ? 'Discharged' : 'Active'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
                           <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setSelectedPatient(p);
-                                setShowVitalsModal(true);
-                              }}
-                              className="text-purple-700 font-bold hover:text-purple-900 hover:underline transition-colors text-sm"
-                            >
-                              Record Vitals
-                            </button>
-                            <span className="text-gray-400">|</span>
-                            <button
-                              onClick={() => {
-                                setSelectedPatient(p);
-                                setShowCareNoteModal(true);
-                              }}
-                              className="text-blue-700 font-bold hover:text-blue-900 hover:underline transition-colors text-sm"
-                            >
-                              Add Note
-                            </button>
-                            <span className="text-gray-400">|</span>
+                            {!p.isDischarged && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedPatient(p);
+                                    setShowVitalsModal(true);
+                                  }}
+                                  className="text-purple-700 font-bold hover:text-purple-900 hover:underline transition-colors text-sm"
+                                >
+                                  Record Vitals
+                                </button>
+                                <span className="text-gray-400">|</span>
+                                <button
+                                  onClick={() => {
+                                    setSelectedPatient(p);
+                                    setShowCareNoteModal(true);
+                                  }}
+                                  className="text-blue-700 font-bold hover:text-blue-900 hover:underline transition-colors text-sm"
+                                >
+                                  Add Note
+                                </button>
+                                <span className="text-gray-400">|</span>
+                              </>
+                            )}
                             <button
                               onClick={() => handleViewPrescriptions(p)}
                               className="text-green-700 font-bold hover:text-green-900 hover:underline transition-colors text-sm"
@@ -481,7 +548,7 @@ function DashboardContent() {
         )}
       </main>
 
-      {/* Password Change Modal */}
+            {/* Password Change Modal */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md border-2 border-gray-200">
@@ -838,7 +905,7 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* View Prescriptions Modal */}
+      {/* View Patient Prescriptions Modal */}
       {showPrescriptionsModal && selectedPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto border-2 border-gray-200 my-8">
@@ -902,6 +969,100 @@ function DashboardContent() {
 
                     {rx.notes && (
                       <div className="mt-4 pt-4 border-t border-gray-300">
+                        <p className="text-sm font-bold text-gray-900">Notes:</p>
+                        <p className="text-sm text-gray-700 font-medium">{rx.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* View All Prescriptions Modal */}
+      {showAllPrescriptionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto border-2 border-gray-200 my-8">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">All Prescriptions</h3>
+                <p className="text-sm text-gray-600 font-medium mt-1">
+                  View all prescriptions across all patients
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAllPrescriptionsModal(false);
+                  setAllPrescriptions([]);
+                  setPrescriptionSearch('');
+                }}
+                className="hover:bg-gray-100 p-2 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-600 hover:text-gray-900" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search by prescription ID, patient, or doctor..."
+                  value={prescriptionSearch}
+                  onChange={(e) => setPrescriptionSearch(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                />
+              </div>
+            </div>
+
+            {filteredPrescriptions.length === 0 ? (
+              <p className="text-center text-gray-600 font-medium py-8">No prescriptions found</p>
+            ) : (
+              <div className="space-y-4">
+                {filteredPrescriptions.map((rx) => (
+                  <div key={rx.id} className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-lg border-2 border-purple-200">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">Prescription ID: {rx.prescriptionId}</p>
+                        <p className="text-xs text-gray-600 font-medium mt-1">
+                          Patient: <span className="font-semibold">{rx.patient.firstName} {rx.patient.lastName}</span> ({rx.patient.patientId})
+                          {rx.patient.isDischarged && <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">Discharged</span>}
+                        </p>
+                        <p className="text-xs text-gray-600 font-medium">
+                          Dr. {rx.doctor.firstName} {rx.doctor.lastName}
+                          {rx.doctor.specialization && ` - ${rx.doctor.specialization}`} • {new Date(rx.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {rx.diagnosis && (
+                      <div className="mb-4">
+                        <p className="text-sm font-bold text-gray-900">Diagnosis:</p>
+                        <p className="text-sm text-gray-700 font-medium">{rx.diagnosis}</p>
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 mb-2">Medicines:</p>
+                      <div className="space-y-2">
+                        {rx.medicines.map((med, idx) => (
+                          <div key={idx} className="bg-white p-3 rounded border border-purple-300">
+                            <p className="font-bold text-gray-900">{med.medicineName}</p>
+                            <p className="text-sm text-gray-700 font-medium">
+                              {med.dosage} • {med.frequency} • {med.duration}
+                            </p>
+                            {med.instructions && (
+                              <p className="text-xs text-gray-600 font-medium mt-1">{med.instructions}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {rx.notes && (
+                      <div className="mt-4 pt-4 border-t border-purple-300">
                         <p className="text-sm font-bold text-gray-900">Notes:</p>
                         <p className="text-sm text-gray-700 font-medium">{rx.notes}</p>
                       </div>

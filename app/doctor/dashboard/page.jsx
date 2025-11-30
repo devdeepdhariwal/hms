@@ -18,7 +18,12 @@ import {
   Plus,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  Heart,
+  Thermometer,
+  UserCheck,
+  History,
+  ClipboardList,
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -28,17 +33,22 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [patientType, setPatientType] = useState('');
+  const [dischargedFilter, setDischargedFilter] = useState('active');
 
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [showPatientDetailsModal, setShowPatientDetailsModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientVitals, setPatientVitals] = useState([]);
+  const [patientPrescriptions, setPatientPrescriptions] = useState([]);
+  const [activeTab, setActiveTab] = useState('vitals');
 
   const [registerLoading, setRegisterLoading] = useState(false);
   const [prescriptionLoading, setPrescriptionLoading] = useState(false);
+  const [dischargeLoading, setDischargeLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: '',
@@ -79,14 +89,13 @@ function DashboardContent() {
     const userData = JSON.parse(localStorage.getItem('user'));
     setUser(userData);
     
-    // Check if user must change password
     if (userData?.mustChangePassword) {
       setShowPasswordModal(true);
     }
     
     fetchStats();
     fetchPatients();
-  }, []);
+  }, [dischargedFilter]);
 
   const fetchStats = async () => {
     try {
@@ -104,7 +113,8 @@ function DashboardContent() {
   const fetchPatients = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const res = await fetch('/api/doctor?action=patients', {
+      const isDischarged = dischargedFilter === 'discharged' ? 'true' : 'false';
+      const res = await fetch(`/api/doctor?action=patients&isDischarged=${isDischarged}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -113,6 +123,81 @@ function DashboardContent() {
       console.error('Failed to fetch patients:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPatientVitals = async (patientId) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`/api/doctor?action=patient-vitals&patientId=${patientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setPatientVitals(data.data);
+    } catch (err) {
+      console.error('Failed to fetch vitals:', err);
+    }
+  };
+
+  const fetchPatientPrescriptions = async (patientId) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`/api/doctor?action=patient-prescriptions&patientId=${patientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setPatientPrescriptions(data.data);
+    } catch (err) {
+      console.error('Failed to fetch prescriptions:', err);
+    }
+  };
+
+  const viewPatientDetails = async (patient) => {
+    setSelectedPatient(patient);
+    setShowPatientDetailsModal(true);
+    setActiveTab('vitals');
+    await fetchPatientVitals(patient.id);
+    await fetchPatientPrescriptions(patient.id);
+  };
+
+  const handleDischargePatient = async () => {
+    if (!selectedPatient) return;
+    
+    const confirmed = window.confirm(`Are you sure you want to discharge ${selectedPatient.firstName} ${selectedPatient.lastName}?`);
+    if (!confirmed) return;
+
+    const dischargeNotes = prompt('Enter discharge notes (optional):');
+
+    setDischargeLoading(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch('/api/doctor?action=discharge-patient', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          patientId: selectedPatient.id,
+          dischargeNotes,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to discharge patient');
+      }
+
+      alert('Patient discharged successfully!');
+      setShowPatientDetailsModal(false);
+      fetchPatients();
+      fetchStats();
+    } catch (err) {
+      setError(err.message || 'Failed to discharge patient');
+    } finally {
+      setDischargeLoading(false);
     }
   };
 
@@ -172,8 +257,6 @@ function DashboardContent() {
       }
 
       alert('Password changed successfully! Please login again.');
-      
-      // Logout and redirect to login
       localStorage.clear();
       window.location.href = '/auth/login';
     } catch (err) {
@@ -357,12 +440,12 @@ function DashboardContent() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-md border-2 border-blue-200 p-6 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-blue-800 mb-1">Total Patients</p>
-                    <p className="text-4xl font-bold text-blue-900">{stats?.totalPatients || 0}</p>
+                    <p className="text-sm font-semibold text-blue-800 mb-1">Active Patients</p>
+                    <p className="text-4xl font-bold text-blue-900">{stats?.activePatients || 0}</p>
                   </div>
                   <div className="bg-blue-600 p-4 rounded-xl shadow-md">
                     <Users className="w-8 h-8 text-white" />
@@ -420,7 +503,7 @@ function DashboardContent() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <input
@@ -441,6 +524,15 @@ function DashboardContent() {
                   <option value="OPD">OPD</option>
                   <option value="IPD">IPD</option>
                 </select>
+
+                <select
+                  value={dischargedFilter}
+                  onChange={(e) => setDischargedFilter(e.target.value)}
+                  className="px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                >
+                  <option value="active">Active Patients</option>
+                  <option value="discharged">Discharged Patients</option>
+                </select>
               </div>
 
               <div className="overflow-x-auto">
@@ -451,7 +543,7 @@ function DashboardContent() {
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Name</th>
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Contact</th>
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Type</th>
-                      <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Gender</th>
+                      <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Status</th>
                       <th className="text-left py-4 px-4 text-sm font-bold text-gray-800">Actions</th>
                     </tr>
                   </thead>
@@ -474,17 +566,38 @@ function DashboardContent() {
                             {p.patientType}
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-sm font-medium text-gray-700">{p.gender}</td>
-                        <td className="py-4 px-4 text-sm">
-                          <button
-                            onClick={() => {
-                              setSelectedPatient(p);
-                              setShowPrescriptionModal(true);
-                            }}
-                            className="text-blue-700 font-bold hover:text-blue-900 hover:underline transition-colors"
+                        <td className="py-4 px-4">
+                          <span
+                            className={`inline-block px-3 py-1 text-xs font-bold rounded-full ${
+                              p.isDischarged
+                                ? 'bg-gray-200 text-gray-900'
+                                : 'bg-blue-200 text-blue-900'
+                            }`}
                           >
-                            Create Prescription
+                            {p.isDischarged ? 'Discharged' : 'Active'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-sm space-x-2">
+                          <button
+                            onClick={() => viewPatientDetails(p)}
+                            className="text-indigo-700 font-bold hover:text-indigo-900 hover:underline transition-colors"
+                          >
+                            View Details
                           </button>
+                          {!p.isDischarged && (
+                            <>
+                              <span className="text-gray-400">|</span>
+                              <button
+                                onClick={() => {
+                                  setSelectedPatient(p);
+                                  setShowPrescriptionModal(true);
+                                }}
+                                className="text-blue-700 font-bold hover:text-blue-900 hover:underline transition-colors"
+                              >
+                                Prescribe
+                              </button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -496,7 +609,176 @@ function DashboardContent() {
         )}
       </main>
 
-      {/* Force Password Change Modal */}
+      {/* Patient Details Modal */}
+      {showPatientDetailsModal && selectedPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto border-2 border-gray-200 my-8">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Patient Details</h3>
+                <p className="text-sm text-gray-600 font-medium mt-1">
+                  {selectedPatient.firstName} {selectedPatient.lastName} ({selectedPatient.patientId})
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {!selectedPatient.isDischarged && (
+                  <button
+                    onClick={handleDischargePatient}
+                    disabled={dischargeLoading}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 disabled:opacity-60 transition-all"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>{dischargeLoading ? 'Discharging...' : 'Discharge Patient'}</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowPatientDetailsModal(false);
+                    setSelectedPatient(null);
+                    setPatientVitals([]);
+                    setPatientPrescriptions([]);
+                  }}
+                  className="hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-600 hover:text-gray-900" />
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-4 text-sm font-semibold text-red-800 bg-red-100 border-2 border-red-300 rounded-lg px-4 py-3">
+                {error}
+              </div>
+            )}
+
+            {/* Tabs */}
+            <div className="mb-6">
+              <div className="border-b border-gray-300">
+                <nav className="-mb-px flex space-x-8">
+                  <button
+                    onClick={() => setActiveTab('vitals')}
+                    className={`border-b-2 py-4 px-1 text-sm font-bold ${
+                      activeTab === 'vitals'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Heart className="w-4 h-4 inline mr-2" />
+                    Vitals
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('prescriptions')}
+                    className={`border-b-2 py-4 px-1 text-sm font-bold ${
+                      activeTab === 'prescriptions'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <History className="w-4 h-4 inline mr-2" />
+                    Prescription History
+                  </button>
+                </nav>
+              </div>
+            </div>
+
+            {/* Vitals Section */}
+            {activeTab === 'vitals' && (
+              <div className="mb-6">
+                <h4 className="text-lg font-bold text-gray-900 mb-4">Recent Vitals</h4>
+                {patientVitals.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No vitals recorded yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {patientVitals.map((vital) => (
+                      <div key={vital.id} className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg border-2 border-green-200">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                          {vital.bloodPressureSystolic && (
+                            <div>
+                              <p className="text-xs text-gray-600 font-semibold">Blood Pressure</p>
+                              <p className="text-sm font-bold text-gray-900">
+                                {vital.bloodPressureSystolic}/{vital.bloodPressureDiastolic} mmHg
+                              </p>
+                            </div>
+                          )}
+                          {vital.temperature && (
+                            <div>
+                              <p className="text-xs text-gray-600 font-semibold">Temperature</p>
+                              <p className="text-sm font-bold text-gray-900">{vital.temperature}°F</p>
+                            </div>
+                          )}
+                          {vital.pulse && (
+                            <div>
+                              <p className="text-xs text-gray-600 font-semibold">Pulse</p>
+                              <p className="text-sm font-bold text-gray-900">{vital.pulse} bpm</p>
+                            </div>
+                          )}
+                          {vital.spO2 && (
+                            <div>
+                              <p className="text-xs text-gray-600 font-semibold">SpO2</p>
+                              <p className="text-sm font-bold text-gray-900">{vital.spO2}%</p>
+                            </div>
+                          )}
+                        </div>
+                        {vital.notes && (
+                          <p className="text-sm text-gray-700 mb-2">
+                            <span className="font-semibold">Notes:</span> {vital.notes}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          Recorded by: {vital.recordedBy.firstName} {vital.recordedBy.lastName} on{' '}
+                          {new Date(vital.recordedAt).toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Prescription History Section */}
+            {activeTab === 'prescriptions' && (
+              <div>
+                <h4 className="text-lg font-bold text-gray-900 mb-4">Prescription History</h4>
+                {patientPrescriptions.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No prescriptions yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {patientPrescriptions.map((prescription) => (
+                      <div key={prescription.id} className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border-2 border-purple-200">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <p className="text-sm font-bold text-gray-900">Prescription ID: {prescription.prescriptionId}</p>
+                            <p className="text-xs text-gray-600">
+                              Dr. {prescription.doctor.firstName} {prescription.doctor.lastName}
+                              {prescription.doctor.specialization && ` - ${prescription.doctor.specialization}`}
+                            </p>
+                          </div>
+                          <p className="text-xs text-gray-500">{new Date(prescription.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        {prescription.diagnosis && (
+                          <p className="text-sm text-gray-700 mb-2">
+                            <span className="font-semibold">Diagnosis:</span> {prescription.diagnosis}
+                          </p>
+                        )}
+                        <div className="mt-2">
+                          <p className="text-xs font-semibold text-gray-700 mb-1">Medicines:</p>
+                          {prescription.medicines.map((med, idx) => (
+                            <div key={idx} className="text-xs text-gray-600 ml-4">
+                              • {med.medicineName} - {med.dosage}, {med.frequency} for {med.duration}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+            {/* Force Password Change Modal */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md border-2 border-gray-200">
@@ -901,7 +1183,7 @@ function DashboardContent() {
                   value={prescriptionForm.diagnosis}
                   onChange={(e) => setPrescriptionForm({ ...prescriptionForm, diagnosis: e.target.value })}
                   className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  placeholder="e.g. Common Cold, Fever"
+                  placeholder="e.g., Viral Fever"
                 />
               </div>
 
@@ -912,7 +1194,7 @@ function DashboardContent() {
                   onChange={(e) => setPrescriptionForm({ ...prescriptionForm, notes: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  placeholder="Additional notes..."
+                  placeholder="Additional instructions..."
                 />
               </div>
 
@@ -929,68 +1211,74 @@ function DashboardContent() {
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  {prescriptionForm.medicines.map((med, index) => (
-                    <div key={index} className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
-                      <div className="flex justify-between items-center mb-3">
-                        <h5 className="text-sm font-bold text-gray-900">Medicine {index + 1}</h5>
-                        {prescriptionForm.medicines.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeMedicine(index)}
-                            className="text-red-600 hover:text-red-800 font-semibold text-sm"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
+                {prescriptionForm.medicines.map((med, index) => (
+                  <div key={index} className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200 mb-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h5 className="text-sm font-bold text-gray-900">Medicine {index + 1}</h5>
+                      {prescriptionForm.medicines.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeMedicine(index)}
+                          className="text-red-600 hover:text-red-800 font-semibold"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="col-span-2">
-                          <input
-                            type="text"
-                            required
-                            value={med.medicineName}
-                            onChange={(e) => updateMedicine(index, 'medicineName', e.target.value)}
-                            className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                            placeholder="Medicine Name *"
-                          />
-                        </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          required
+                          value={med.medicineName}
+                          onChange={(e) => updateMedicine(index, 'medicineName', e.target.value)}
+                          className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                          placeholder="Medicine Name"
+                        />
+                      </div>
+                      <div>
                         <input
                           type="text"
                           required
                           value={med.dosage}
                           onChange={(e) => updateMedicine(index, 'dosage', e.target.value)}
                           className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                          placeholder="Dosage (e.g. 500mg) *"
+                          placeholder="Dosage (e.g., 500mg)"
                         />
+                      </div>
+                      <div>
                         <input
                           type="text"
                           required
                           value={med.frequency}
                           onChange={(e) => updateMedicine(index, 'frequency', e.target.value)}
                           className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                          placeholder="Frequency (e.g. 2x daily) *"
+                          placeholder="Frequency (e.g., 2x/day)"
                         />
+                      </div>
+                      <div>
                         <input
                           type="text"
                           required
                           value={med.duration}
                           onChange={(e) => updateMedicine(index, 'duration', e.target.value)}
                           className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                          placeholder="Duration (e.g. 5 days) *"
+                          placeholder="Duration (e.g., 5 days)"
                         />
+                      </div>
+                      <div>
                         <input
                           type="text"
                           value={med.instructions}
                           onChange={(e) => updateMedicine(index, 'instructions', e.target.value)}
                           className="w-full px-4 py-3 text-gray-900 font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                          placeholder="Instructions (e.g. After meals)"
+                          placeholder="Instructions (e.g., After meals)"
                         />
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t-2 border-gray-200">
@@ -1016,6 +1304,7 @@ function DashboardContent() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -215,6 +215,7 @@ async function getPatients(req) {
     
     const patientType = searchParams.get('patientType') || '';
     const departmentId = searchParams.get('departmentId') || '';
+    const isDischarged = searchParams.get('isDischarged') || '';
 
     const where = buildWhereClause(
       search,
@@ -223,6 +224,7 @@ async function getPatients(req) {
         tenantId: doctor.tenantId,
         ...(patientType && { patientType }),
         ...(departmentId && { departmentId }),
+        ...(isDischarged !== '' && { isDischarged: isDischarged === 'true' }),
       }
     );
 
@@ -236,6 +238,7 @@ async function getPatients(req) {
       include: {
         department: { select: { name: true } },
         createdBy: { select: { firstName: true, lastName: true } },
+        dischargedByUser: { select: { firstName: true, lastName: true } }, // ✅ REMOVED employeeId
       },
     });
 
@@ -268,11 +271,11 @@ async function getPatient(req) {
         department: true,
         prescriptions: {
           orderBy: { createdAt: 'desc' },
-          take: 10,
           include: {
-            doctor: { select: { firstName: true, lastName: true } },
+            doctor: { select: { firstName: true, lastName: true, specialization: true } },
           },
         },
+        dischargedByUser: { select: { firstName: true, lastName: true } }, // ✅ REMOVED employeeId
       },
     });
 
@@ -283,6 +286,96 @@ async function getPatient(req) {
     return NextResponse.json(ApiResponse.success(patient, 'Patient fetched successfully'));
   } catch (error) {
     return NextResponse.json(handleApiError(error, 'Failed to fetch patient'), { status: 500 });
+  }
+}
+
+// ✅ GET /api/doctor?action=patient-vitals&patientId=xxx
+async function getPatientVitals(req) {
+  try {
+    const check = await checkDoctor(req);
+    if (check.error) return check.error;
+
+    const { searchParams } = new URL(req.url);
+    const patientId = searchParams.get('patientId');
+    const { page, limit, sortBy, sortOrder } = parseQueryParams(searchParams);
+
+    if (!patientId) {
+      return NextResponse.json(ApiResponse.error('Patient ID required', 400), { status: 400 });
+    }
+
+    const doctor = await prisma.user.findUnique({ where: { id: check.user.id } });
+
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, tenantId: doctor.tenantId },
+    });
+
+    if (!patient) {
+      return NextResponse.json(ApiResponse.error('Patient not found', 404), { status: 404 });
+    }
+
+    const where = { patientId };
+    const total = await prisma.vital.count({ where });
+
+    const vitals = await prisma.vital.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { [sortBy]: sortOrder },
+      include: {
+        recordedBy: { select: { firstName: true, lastName: true } }, // ✅ REMOVED employeeId
+      },
+    });
+
+    const pagination = buildPagination(page, limit, total);
+
+    return NextResponse.json(ApiResponse.paginated(vitals, pagination, 'Patient vitals fetched successfully'));
+  } catch (error) {
+    return NextResponse.json(handleApiError(error, 'Failed to fetch vitals'), { status: 500 });
+  }
+}
+
+// ✅ GET /api/doctor?action=patient-prescriptions&patientId=xxx (all prescriptions for a patient)
+async function getPatientPrescriptions(req) {
+  try {
+    const check = await checkDoctor(req);
+    if (check.error) return check.error;
+
+    const { searchParams } = new URL(req.url);
+    const patientId = searchParams.get('patientId');
+    const { page, limit, sortBy, sortOrder } = parseQueryParams(searchParams);
+
+    if (!patientId) {
+      return NextResponse.json(ApiResponse.error('Patient ID required', 400), { status: 400 });
+    }
+
+    const doctor = await prisma.user.findUnique({ where: { id: check.user.id } });
+
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, tenantId: doctor.tenantId },
+    });
+
+    if (!patient) {
+      return NextResponse.json(ApiResponse.error('Patient not found', 404), { status: 404 });
+    }
+
+    const where = { patientId, tenantId: doctor.tenantId };
+    const total = await prisma.prescription.count({ where });
+
+    const prescriptions = await prisma.prescription.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { [sortBy]: sortOrder },
+      include: {
+        doctor: { select: { firstName: true, lastName: true, specialization: true } }, // ✅ REMOVED employeeId
+      },
+    });
+
+    const pagination = buildPagination(page, limit, total);
+
+    return NextResponse.json(ApiResponse.paginated(prescriptions, pagination, 'Patient prescriptions fetched successfully'));
+  } catch (error) {
+    return NextResponse.json(handleApiError(error, 'Failed to fetch prescriptions'), { status: 500 });
   }
 }
 
@@ -306,6 +399,11 @@ async function createPrescription(req) {
 
     if (!patient) {
       return NextResponse.json(ApiResponse.error('Patient not found', 404), { status: 404 });
+    }
+
+    // ✅ Check if patient is discharged
+    if (patient.isDischarged) {
+      return NextResponse.json(ApiResponse.error('Cannot create prescription for discharged patient', 400), { status: 400 });
     }
 
     const prescriptionId = await generatePrescriptionId(doctor.hospitalId);
@@ -373,6 +471,53 @@ async function getPrescriptions(req) {
   }
 }
 
+// ✅ PATCH /api/doctor?action=discharge-patient
+async function dischargePatient(req) {
+  try {
+    const check = await checkDoctor(req);
+    if (check.error) return check.error;
+
+    const { patientId, dischargeNotes } = await req.json();
+
+    if (!patientId) {
+      return NextResponse.json(ApiResponse.error('Patient ID required', 400), { status: 400 });
+    }
+
+    const doctor = await prisma.user.findUnique({ where: { id: check.user.id } });
+
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, tenantId: doctor.tenantId },
+    });
+
+    if (!patient) {
+      return NextResponse.json(ApiResponse.error('Patient not found', 404), { status: 404 });
+    }
+
+    if (patient.isDischarged) {
+      return NextResponse.json(ApiResponse.error('Patient already discharged', 400), { status: 400 });
+    }
+
+    const updatedPatient = await prisma.patient.update({
+      where: { id: patientId },
+      data: {
+        isDischarged: true,
+        dischargedAt: new Date(),
+        dischargedBy: doctor.id,
+        dischargeNotes,
+      },
+      include: {
+        dischargedByUser: { select: { firstName: true, lastName: true } }, // ✅ REMOVED employeeId
+      },
+    });
+
+    return NextResponse.json(
+      ApiResponse.success(updatedPatient, 'Patient discharged successfully')
+    );
+  } catch (error) {
+    return NextResponse.json(handleApiError(error, 'Failed to discharge patient'), { status: 500 });
+  }
+}
+
 // GET /api/doctor?action=dashboard-stats
 async function getDashboardStats(req) {
   try {
@@ -383,14 +528,24 @@ async function getDashboardStats(req) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [totalPatients, opdPatients, ipdPatients, todayPrescriptions, totalPrescriptions] = await Promise.all([
+    const [
+      totalPatients, 
+      opdPatients, 
+      ipdPatients, 
+      todayPrescriptions, 
+      totalPrescriptions,
+      dischargedPatients,
+      activePatients
+    ] = await Promise.all([
       prisma.patient.count({ where: { tenantId: doctor.tenantId } }),
-      prisma.patient.count({ where: { tenantId: doctor.tenantId, patientType: 'OPD' } }),
-      prisma.patient.count({ where: { tenantId: doctor.tenantId, patientType: 'IPD' } }),
+      prisma.patient.count({ where: { tenantId: doctor.tenantId, patientType: 'OPD', isDischarged: false } }),
+      prisma.patient.count({ where: { tenantId: doctor.tenantId, patientType: 'IPD', isDischarged: false } }),
       prisma.prescription.count({
         where: { doctorId: doctor.id, createdAt: { gte: today } },
       }),
       prisma.prescription.count({ where: { doctorId: doctor.id } }),
+      prisma.patient.count({ where: { tenantId: doctor.tenantId, isDischarged: true } }),
+      prisma.patient.count({ where: { tenantId: doctor.tenantId, isDischarged: false } }),
     ]);
 
     return NextResponse.json(
@@ -401,6 +556,8 @@ async function getDashboardStats(req) {
           ipdPatients,
           todayPrescriptions,
           totalPrescriptions,
+          dischargedPatients,
+          activePatients,
         },
         'Dashboard stats fetched successfully'
       )
@@ -417,13 +574,15 @@ export async function GET(req) {
 
   if (action === 'patients') return getPatients(req);
   if (action === 'patient') return getPatient(req);
+  if (action === 'patient-vitals') return getPatientVitals(req);
+  if (action === 'patient-prescriptions') return getPatientPrescriptions(req);
   if (action === 'prescriptions') return getPrescriptions(req);
   if (action === 'dashboard-stats') return getDashboardStats(req);
 
   return NextResponse.json(ApiResponse.error('Invalid action', 400), { status: 400 });
 }
 
-// ✅ ONLY ONE POST EXPORT (combined all actions)
+// ✅ ONLY ONE POST EXPORT
 export async function POST(req) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
@@ -431,6 +590,16 @@ export async function POST(req) {
   if (action === 'register-patient') return registerPatient(req);
   if (action === 'create-prescription') return createPrescription(req);
   if (action === 'reset-password') return resetPassword(req);
+
+  return NextResponse.json(ApiResponse.error('Invalid action', 400), { status: 400 });
+}
+
+// ✅ PATCH EXPORT
+export async function PATCH(req) {
+  const { searchParams } = new URL(req.url);
+  const action = searchParams.get('action');
+
+  if (action === 'discharge-patient') return dischargePatient(req);
 
   return NextResponse.json(ApiResponse.error('Invalid action', 400), { status: 400 });
 }

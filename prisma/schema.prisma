@@ -89,6 +89,7 @@ model User {
   passwordResets    PasswordReset[]
   refreshTokens     RefreshToken[]
   createdPatients   Patient[] @relation("CreatedBy")
+  dischargedPatients Patient[] @relation("DischargedBy")
   prescriptions     Prescription[]
   vitalsRecorded    Vital[]
   careNotes         CareNote[]
@@ -249,6 +250,13 @@ model Patient {
   confidentialityLevel String @default("NORMAL")
   
   isActive          Boolean  @default(true)
+  
+  // Discharge tracking
+  isDischarged      Boolean  @default(false)
+  dischargedAt      DateTime?
+  dischargedBy      String?  @db.ObjectId
+  dischargedByUser  User?    @relation("DischargedBy", fields: [dischargedBy], references: [id])
+  dischargeNotes    String?
   
   createdById       String   @db.ObjectId
   createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
